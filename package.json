@@ -6,8 +6,7 @@
     "dev": "NEXT_DISABLE_BFCACHE_WARNINGS=true next dev --turbopack --port 3001",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "cleanup": "bash scripts/cleanup.sh"
+    "lint": "next lint"
   },
   "dependencies": {
     "autoprefixer": "^10.4.20",

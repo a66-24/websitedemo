@@ -90,11 +90,14 @@ main_cleanup() {
     echo "清理缓存和构建文件..."
     cache_dirs=(
         "node_modules"
-        ".next"
-        ".turbo"
-        "build"
-        "dist"
-        ".cache"
+        ".next"        # Next.js 开发缓存
+        ".turbo"       # Turbopack 缓存
+        "build"        # 通用构建目录
+        "dist"         # 通用分发目录
+        ".cache"       # 通用缓存目录
+        "out"          # Next.js 静态导出目录
+        ".vercel"      # Vercel 部署缓存
+        ".env.*.local" # 本地环境变量（可选，取决于你的需求）
     )
     
     for dir in "${cache_dirs[@]}"; do
@@ -104,7 +107,21 @@ main_cleanup() {
         fi
     done
     
-    # 3. 清理日志文件
+    # 3. 清理构建产物
+    echo "清理构建产物..."
+    build_artifacts=(
+        "*.tsbuildinfo"     # TypeScript 构建信息
+        "next-env.d.ts"     # Next.js TypeScript 声明文件
+        ".next-*"           # Next.js 相关文件
+        "tsconfig.tsbuildinfo"  # TypeScript 构建缓存
+        "build-storybook.log"   # Storybook 日志（如果使用）
+    )
+    
+    for artifact in "${build_artifacts[@]}"; do
+        find . -name "$artifact" -type f -delete
+    done
+    
+    # 4. 清理日志文件
     echo "清理日志文件..."
     find . -type f -name "*.log" -delete
     find . -type f -name "npm-debug.log*" -delete
@@ -112,17 +129,17 @@ main_cleanup() {
     find . -type f -name "yarn-error.log*" -delete
     find . -type f -name ".pnpm-debug.log*" -delete
     
-    # 4. 清理IDE文件但保留cursor配置
+    # 5. 清理IDE文件但保留cursor配置
     echo "清理IDE文件..."
     if [ -d ".vscode" ]; then
         find .vscode -type f ! -name "settings.json" -delete
     fi
     
-    # 5. 清理系统文件
+    # 6. 清理系统文件
     echo "清理系统文件..."
     find . -type f -name ".DS_Store" -delete
     
-    # 6. 检查并修复package.json
+    # 7. 检查并修复package.json
     echo "检查package.json..."
     if [ -f "package.json" ]; then
         if ! jq empty package.json 2>/dev/null; then
@@ -137,12 +154,10 @@ configure_npm_registry() {
     
     # 设置淘宝镜像源
     npm config set registry https://registry.npmmirror.com
-    # 设置 node-sass 淘宝镜像源
-    npm config set sass_binary_site https://npmmirror.com/mirrors/node-sass
-    # 设置 electron 淘宝镜像源
-    npm config set electron_mirror https://npmmirror.com/mirrors/electron/
-    # 设置 puppeteer 淘宝镜像源
-    npm config set puppeteer_download_host https://npmmirror.com/mirrors
+    
+    # 验证镜像源设置
+    echo "当前 npm 镜像源："
+    npm config get registry
     
     echo -e "${GREEN}npm 镜像源配置完成${NC}"
 }
@@ -160,11 +175,16 @@ dedupe_dependencies() {
     else
         echo "使用 npm 去重依赖..."
         npm dedupe
-        # 运行额外的依赖分析
+        # 运行额外的依赖分析（移除不存在的包）
         if command -v npx &> /dev/null; then
             echo "分析依赖树..."
-            npx dependency-cruise src
-            npx find-duplicate-dependencies
+            # 使用正确的包名：dependency-cruiser
+            npx dependency-cruiser src || {
+                echo -e "${YELLOW}依赖分析工具未安装，跳过分析${NC}"
+            }
+            npx find-duplicate-deps || {
+                echo -e "${YELLOW}重复依赖检查工具未安装，跳过检查${NC}"
+            }
         fi
     fi
 }
