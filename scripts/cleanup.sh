@@ -147,17 +147,47 @@ configure_npm_registry() {
     echo -e "${GREEN}npm 镜像源配置完成${NC}"
 }
 
-# 重新安装依赖函数
+# 添加依赖去重函数
+dedupe_dependencies() {
+    echo -e "${GREEN}检查并去重依赖...${NC}"
+    
+    if [ -f "pnpm-lock.yaml" ]; then
+        echo "使用 pnpm 去重依赖..."
+        pnpm dedupe
+    elif [ -f "yarn.lock" ]; then
+        echo "使用 yarn 去重依赖..."
+        yarn dedupe
+    else
+        echo "使用 npm 去重依赖..."
+        npm dedupe
+        # 运行额外的依赖分析
+        if command -v npx &> /dev/null; then
+            echo "分析依赖树..."
+            npx dependency-cruise src
+            npx find-duplicate-dependencies
+        fi
+    fi
+}
+
+# 修改 reinstall_dependencies 函数
 reinstall_dependencies() {
     echo -e "${GREEN}重新安装依赖...${NC}"
     
     # 配置镜像源
     configure_npm_registry
     
-    # 清理 package-lock.json 以避免旧依赖问题
+    # 清理 lock 文件
     if [ -f "package-lock.json" ]; then
         rm package-lock.json
         echo "已删除 package-lock.json"
+    fi
+    if [ -f "yarn.lock" ]; then
+        rm yarn.lock
+        echo "已删除 yarn.lock"
+    fi
+    if [ -f "pnpm-lock.yaml" ]; then
+        rm pnpm-lock.yaml
+        echo "已删除 pnpm-lock.yaml"
     fi
     
     # 检查并更新 package.json 中的依赖版本
@@ -172,24 +202,32 @@ reinstall_dependencies() {
             "eslint@latest"
         )
         
+        for dep in "${dependencies_to_remove[@]}"; do
+            npm uninstall "$dep" --silent
+        done
+        
         for dep in "${dependencies_to_update[@]}"; do
             echo "更新 $dep"
             npm install "$dep" --save-dev --silent
         done
     fi
     
-    # 检查包管理器
-    if [ -f "pnpm-lock.yaml" ]; then
+    # 安装依赖
+    if command -v pnpm &> /dev/null; then
         echo "使用 pnpm 安装依赖..."
         pnpm install --no-frozen-lockfile
-    elif [ -f "yarn.lock" ]; then
+        pnpm install --force # 强制重新安装以解决依赖问题
+    elif command -v yarn &> /dev/null; then
         echo "使用 yarn 安装依赖..."
-        yarn install --check-files
+        yarn install --check-files --force # 强制重新安装
     else
         echo "使用 npm 安装依赖..."
-        # 使用 --no-fund 和 --no-audit 减少警告信息
         npm install --no-fund --no-audit --silent
+        npm install --force # 强制重新安装
     fi
+    
+    # 执行依赖去重
+    dedupe_dependencies
     
     # 运行依赖审计并修复
     echo "运行安全审计..."
