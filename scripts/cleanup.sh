@@ -175,17 +175,6 @@ dedupe_dependencies() {
     else
         echo "使用 npm 去重依赖..."
         npm dedupe
-        # 运行额外的依赖分析（移除不存在的包）
-        if command -v npx &> /dev/null; then
-            echo "分析依赖树..."
-            # 使用正确的包名：dependency-cruiser
-            npx dependency-cruiser src || {
-                echo -e "${YELLOW}依赖分析工具未安装，跳过分析${NC}"
-            }
-            npx find-duplicate-deps || {
-                echo -e "${YELLOW}重复依赖检查工具未安装，跳过检查${NC}"
-            }
-        fi
     fi
 }
 
@@ -201,14 +190,6 @@ reinstall_dependencies() {
         rm package-lock.json
         echo "已删除 package-lock.json"
     fi
-    if [ -f "yarn.lock" ]; then
-        rm yarn.lock
-        echo "已删除 yarn.lock"
-    fi
-    if [ -f "pnpm-lock.yaml" ]; then
-        rm pnpm-lock.yaml
-        echo "已删除 pnpm-lock.yaml"
-    fi
     
     # 检查并更新 package.json 中的依赖版本
     if [ -f "package.json" ]; then
@@ -222,10 +203,6 @@ reinstall_dependencies() {
             "eslint@latest"
         )
         
-        for dep in "${dependencies_to_remove[@]}"; do
-            npm uninstall "$dep" --silent
-        done
-        
         for dep in "${dependencies_to_update[@]}"; do
             echo "更新 $dep"
             npm install "$dep" --save-dev --silent
@@ -233,31 +210,11 @@ reinstall_dependencies() {
     fi
     
     # 安装依赖
-    if command -v pnpm &> /dev/null; then
-        echo "使用 pnpm 安装依赖..."
-        pnpm install --no-frozen-lockfile
-        pnpm install --force # 强制重新安装以解决依赖问题
-    elif command -v yarn &> /dev/null; then
-        echo "使用 yarn 安装依赖..."
-        yarn install --check-files --force # 强制重新安装
-    else
-        echo "使用 npm 安装依赖..."
-        npm install --no-fund --no-audit --silent
-        npm install --force # 强制重新安装
-    fi
+    echo "使用 npm 安装依赖..."
+    npm install --no-fund --no-audit --silent
     
     # 执行依赖去重
     dedupe_dependencies
-    
-    # 运行依赖审计并修复
-    echo "运行安全审计..."
-    if [ -f "pnpm-lock.yaml" ]; then
-        pnpm audit fix
-    elif [ -f "yarn.lock" ]; then
-        yarn audit fix
-    else
-        npm audit fix
-    fi
 }
 
 # 创建清理后的Git提交
