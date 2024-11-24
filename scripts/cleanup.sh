@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# 清理脚本 v1.2.0
+# 清理脚本 v1.3.0
 # 适用于 Mac M1 环境
-# 作者: Claude
+# 作者: a66.chkt@outlook.com
 # 最后更新: 2024-03
 
 # 设置语言环境为UTF-8
@@ -120,13 +120,52 @@ main_cleanup() {
 # 重新安装依赖函数
 reinstall_dependencies() {
     echo -e "${GREEN}重新安装依赖...${NC}"
+    
+    # 清理 package-lock.json 以避免旧依赖问题
+    if [ -f "package-lock.json" ]; then
+        rm package-lock.json
+        echo "已删除 package-lock.json"
+    fi
+    
+    # 检查并更新 package.json 中的依赖版本
+    if [ -f "package.json" ]; then
+        # 更新过时的依赖
+        echo "更新依赖版本..."
+        dependencies_to_update=(
+            "rimraf@^5.0.0"
+            "glob@^10.0.0"
+            "@eslint/config-array@latest"
+            "@eslint/object-schema@latest"
+            "eslint@latest"
+        )
+        
+        for dep in "${dependencies_to_update[@]}"; do
+            echo "更新 $dep"
+            npm install "$dep" --save-dev --silent
+        done
+    fi
+    
     # 检查包管理器
     if [ -f "pnpm-lock.yaml" ]; then
-        pnpm install
+        echo "使用 pnpm 安装依赖..."
+        pnpm install --no-frozen-lockfile
     elif [ -f "yarn.lock" ]; then
-        yarn install
+        echo "使用 yarn 安装依赖..."
+        yarn install --check-files
     else
-        npm install
+        echo "使用 npm 安装依赖..."
+        # 使用 --no-fund 和 --no-audit 减少警告信息
+        npm install --no-fund --no-audit --silent
+    fi
+    
+    # 运行依赖审计并修复
+    echo "运行安全审计..."
+    if [ -f "pnpm-lock.yaml" ]; then
+        pnpm audit fix
+    elif [ -f "yarn.lock" ]; then
+        yarn audit fix
+    else
+        npm audit fix
     fi
 }
 
@@ -145,6 +184,7 @@ create_cleanup_commit() {
 echo -e "${YELLOW}准备开始清理...${NC}"
 echo -e "${YELLOW}此操作将清理项目中的临时文件和缓存${NC}"
 echo -e "${YELLOW}所有更改将通过Git进行备份${NC}"
+echo -e "${YELLOW}同时会更新并修复过时的依赖${NC}"
 read -p "是否继续? (y/n) " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]
@@ -154,6 +194,7 @@ then
     reinstall_dependencies
     create_cleanup_commit
     echo -e "${GREEN}清理完成!${NC}"
+    echo -e "${GREEN}依赖已更新到最新版本${NC}"
     echo -e "${YELLOW}提示: 如果需要恢复任何文件，请使用 git log 查看备份记录${NC}"
     echo -e "${YELLOW}提示: 如果需要重新启动开发服务器，请运行 'npm run dev'${NC}"
 else
