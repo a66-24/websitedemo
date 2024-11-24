@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 清理脚本 v1.3.0
+# 清理脚本 v1.3.1
 # 适用于 Mac M1 环境
 # 作者: a66.chkt@outlook.com
 # 最后更新: 2024-03
@@ -51,9 +51,23 @@ create_git_backup() {
     echo -e "${GREEN}Git备份完成${NC}"
 }
 
+# 在 main_cleanup 函数中添加端口检查
+check_and_kill_port() {
+    local port=$1
+    if lsof -i :$port > /dev/null; then
+        echo -e "${YELLOW}端口 $port 被占用，尝试释放...${NC}"
+        lsof -ti :$port | xargs kill -9
+        echo "端口已释放"
+    fi
+}
+
 # 主清理函数
 main_cleanup() {
     echo -e "${GREEN}开始清理项目...${NC}"
+    
+    # 检查常用开发端口
+    check_and_kill_port 3000
+    check_and_kill_port 3001
     
     # 1. 删除不需要的文件
     echo "删除无用文件..."
@@ -117,9 +131,28 @@ main_cleanup() {
     fi
 }
 
+# 配置npm镜像源
+configure_npm_registry() {
+    echo -e "${GREEN}配置 npm 镜像源...${NC}"
+    
+    # 设置淘宝镜像源
+    npm config set registry https://registry.npmmirror.com
+    # 设置 node-sass 淘宝镜像源
+    npm config set sass_binary_site https://npmmirror.com/mirrors/node-sass
+    # 设置 electron 淘宝镜像源
+    npm config set electron_mirror https://npmmirror.com/mirrors/electron/
+    # 设置 puppeteer 淘宝镜像源
+    npm config set puppeteer_download_host https://npmmirror.com/mirrors
+    
+    echo -e "${GREEN}npm 镜像源配置完成${NC}"
+}
+
 # 重新安装依赖函数
 reinstall_dependencies() {
     echo -e "${GREEN}重新安装依赖...${NC}"
+    
+    # 配置镜像源
+    configure_npm_registry
     
     # 清理 package-lock.json 以避免旧依赖问题
     if [ -f "package-lock.json" ]; then
